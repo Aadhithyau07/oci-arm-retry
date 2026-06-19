@@ -29,6 +29,8 @@ jobs:
           chmod 600 ~/.oci/config
 
       - name: Try to launch instance
+        env:
+          SUPPRESS_LABEL_WARNING: "True"
         run: |
           set +e
           echo "${{ secrets.SSH_PUBLIC_KEY }}" > /tmp/sshkey.pub
@@ -38,24 +40,30 @@ jobs:
             echo "Instance already exists — nothing to do."
             exit 0
           fi
-          out=$(oci compute instance launch \
-            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
-            --availability-domain "qoGE:AP-HYDERABAD-1-AD-1" \
-            --shape "VM.Standard.A1.Flex" \
-            --shape-config '{"ocpus":2,"memoryInGBs":12}' \
-            --image-id "ocid1.image.oc1.ap-hyderabad-1.aaaaaaaaqkushqsrkkiinw54mregtqje64j2zkfwfd75k3fi2pwksdjfqx5q" \
-            --subnet-id "ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaak7vb3aqoj6xs3jzsudrdrixj5t6bu3ti7xd6cb64mazekdlk6ijq" \
-            --assign-public-ip true \
-            --display-name "traccar-server" \
-            --ssh-authorized-keys-file /tmp/sshkey.pub \
-            --boot-volume-size-in-gbs 50 \
-            --no-retry 2>&1)
-          echo "$out"
-          if echo "$out" | grep -q '"id":'; then
-            echo "SUCCESS — instance is launching!"
-          elif echo "$out" | grep -qi "out of host capacity"; then
-            echo "Out of capacity right now — will retry next run."
-          else
-            echo "Unexpected error — see output above."
-            exit 1
-          fi
+          for i in $(seq 1 8); do
+            echo "----- Attempt $i of 8 -----"
+            out=$(oci compute instance launch \
+              --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+              --availability-domain "qoGE:AP-HYDERABAD-1-AD-1" \
+              --shape "VM.Standard.A1.Flex" \
+              --shape-config '{"ocpus":2,"memoryInGBs":12}' \
+              --image-id "ocid1.image.oc1.ap-hyderabad-1.aaaaaaaaqkushqsrkkiinw54mregtqje64j2zkfwfd75k3fi2pwksdjfqx5q" \
+              --subnet-id "ocid1.subnet.oc1.ap-hyderabad-1.aaaaaaaak7vb3aqoj6xs3jzsudrdrixj5t6bu3ti7xd6cb64mazekdlk6ijq" \
+              --assign-public-ip true \
+              --display-name "traccar-server" \
+              --ssh-authorized-keys-file /tmp/sshkey.pub \
+              --boot-volume-size-in-gbs 50 \
+              --no-retry 2>&1)
+            if echo "$out" | grep -q '"id":'; then
+              echo "SUCCESS — instance is launching!"
+              exit 0
+            elif echo "$out" | grep -qi "out of host capacity"; then
+              echo "Out of capacity — waiting 30s..."
+              sleep 30
+            else
+              echo "$out"
+              echo "Unexpected error — see output above."
+              exit 1
+            fi
+          done
+          echo "All 8 attempts this run were out of capacity. Next run in ~5 min."
