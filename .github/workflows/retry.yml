@@ -30,6 +30,7 @@ jobs:
 
       - name: Try to launch instance
         run: |
+          set +e
           echo "${{ secrets.SSH_PUBLIC_KEY }}" > /tmp/sshkey.pub
           COUNT=$(oci compute instance list --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" --query "length(data[?\"display-name\"=='traccar-server' && \"lifecycle-state\"!='TERMINATED' && \"lifecycle-state\"!='TERMINATING'])" --raw-output 2>/dev/null)
           echo "Existing traccar-server instances: ${COUNT:-0}"
