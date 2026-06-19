@@ -40,8 +40,8 @@ jobs:
             echo "Instance already exists — nothing to do."
             exit 0
           fi
-          for i in $(seq 1 8); do
-            echo "----- Attempt $i of 8 -----"
+          for i in $(seq 1 5); do
+            echo "----- Attempt $i of 5 -----"
             out=$(oci compute instance launch \
               --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
               --availability-domain "qoGE:AP-HYDERABAD-1-AD-1" \
@@ -58,12 +58,15 @@ jobs:
               echo "SUCCESS — instance is launching!"
               exit 0
             elif echo "$out" | grep -qi "out of host capacity"; then
-              echo "Out of capacity — waiting 30s..."
-              sleep 30
+              echo "Out of capacity — waiting 60s..."
+              sleep 60
+            elif echo "$out" | grep -qi "too many requests"; then
+              echo "Rate-limited by Oracle — waiting 60s..."
+              sleep 60
             else
               echo "$out"
               echo "Unexpected error — see output above."
               exit 1
             fi
           done
-          echo "All 8 attempts this run were out of capacity. Next run in ~5 min."
+          echo "All attempts this run were out of capacity / rate-limited. Next run in ~5 min."
