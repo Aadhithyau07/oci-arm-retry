@@ -2,12 +2,17 @@ name: OCI ARM Retry
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
+
+concurrency:
+  group: oci-arm-retry
+  cancel-in-progress: false
 
 jobs:
   launch:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     steps:
       - name: Install OCI CLI
         run: |
@@ -40,8 +45,11 @@ jobs:
             echo "Instance already exists — nothing to do."
             exit 0
           fi
-          for i in $(seq 1 5); do
-            echo "----- Attempt $i of 5 -----"
+          END=$(( $(date +%s) + 19800 ))
+          ATTEMPT=0
+          while [ "$(date +%s)" -lt "$END" ]; do
+            ATTEMPT=$((ATTEMPT+1))
+            echo "----- Attempt $ATTEMPT at $(date -u +%H:%M:%S) UTC -----"
             out=$(oci compute instance launch \
               --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
               --availability-domain "qoGE:AP-HYDERABAD-1-AD-1" \
@@ -61,12 +69,12 @@ jobs:
               echo "Out of capacity — waiting 60s..."
               sleep 60
             elif echo "$out" | grep -qi "too many requests"; then
-              echo "Rate-limited by Oracle — waiting 60s..."
-              sleep 60
+              echo "Rate-limited — waiting 90s..."
+              sleep 90
             else
               echo "$out"
               echo "Unexpected error — see output above."
               exit 1
             fi
           done
-          echo "All attempts this run were out of capacity / rate-limited. Next run in ~5 min."
+          echo "Reached ~5.5h limit for this run. Next run picks up right after."
